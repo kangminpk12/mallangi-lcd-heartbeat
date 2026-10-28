@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>말랑이 — LCD 1602 하트비트 캐릭터</title>
+<meta name="description" content="Arduino UNO + I2C LCD 1602의 첫 글자 칸에 Custom Character로 만든 '말랑이' 점프 애니메이션 — 연결도, 스케치, 데모, 설명 및 고찰">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --ink:#1b1f2a; --muted:#5d6577; --line:#e3e6ee;
+  --accent:#1f5eff; --accent-soft:#e8eeff; --lcd:#1438d6; --lcd-off:#2b4fe6; --lcd-on:#e9f6ff;
+  --pix-on:#1b1f2a; --pix-off:#e9ecf3; --code-bg:#0d1117;
+  --c-idle:#7a8599; --c-crouch:#f0a020; --c-launch:#e5484d; --c-air:#1f5eff; --c-land:#8e4ec6; --c-recover:#12a594;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1218; --surface:#171b24; --ink:#e8ebf2; --muted:#9aa3b5; --line:#2a303d;
+    --accent:#6f95ff; --accent-soft:#1d2640; --pix-on:#e8ebf2; --pix-off:#262c39; }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;line-height:1.75;font-size:16px}
+a{color:var(--accent)}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px}
+header.hero{padding:56px 0 32px}
+.kicker{font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.2;margin:8px 0 12px;font-weight:900}
+.sub{color:var(--muted);margin:0 0 6px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;padding:4px 10px;border-radius:99px}
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.toc .wrap{display:flex;gap:4px;overflow-x:auto;padding:8px 16px}
+nav.toc a{white-space:nowrap;text-decoration:none;color:var(--muted);font-size:14px;font-weight:500;padding:6px 10px;border-radius:8px}
+nav.toc a:hover{background:var(--accent-soft);color:var(--accent)}
+section{padding:44px 0 8px}
+h2{font-size:26px;margin:0 0 6px;font-weight:900}
+h2 .n{color:var(--accent);margin-right:8px}
+h3{font-size:19px;margin:28px 0 8px}
+.lead{color:var(--muted);margin-top:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+figure{margin:0}
+figure img{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--line);background:#fff}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
+th{font-size:13px;color:var(--muted);font-weight:700}
+.dot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+code{font-family:"JetBrains Mono",monospace;font-size:.9em;background:var(--accent-soft);padding:1px 5px;border-radius:5px}
+pre{margin:0}
+pre code.hljs{display:block;border-radius:12px;padding:18px;font-size:13.5px;line-height:1.6;background:var(--code-bg);max-height:640px;overflow:auto}
+.callout{border-left:4px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 10px 10px 0;margin:16px 0}
+
+/* ---------- LCD 시뮬레이터 ---------- */
+.sim{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:20px;align-items:center}
+@media (max-width:760px){.sim{grid-template-columns:1fr}}
+.lcd-shell{background:#1d7a3a;border-radius:14px;padding:14px;box-shadow:inset 0 0 0 2px #145c2b}
+.lcd-bezel{background:#111;border-radius:6px;padding:10px}
+#lcd{width:100%;height:auto;display:block;border-radius:3px;background:var(--lcd)}
+.zoom-wrap{text-align:center}
+#zoom{width:150px;height:240px;image-rendering:pixelated;border-radius:8px;border:1px solid var(--line);background:var(--lcd)}
+.zoom-wrap .label{font-size:13px;color:var(--muted);margin-top:6px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.controls button{font:inherit;font-size:14px;font-weight:700;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:6px 12px;border-radius:9px;cursor:pointer}
+.controls button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.phase-now{margin-left:auto;font-size:14px;color:var(--muted)}
+.phase-now b{color:var(--ink)}
+.timeline{position:relative;display:flex;height:34px;margin-top:14px;border-radius:9px;overflow:hidden;font-size:11.5px;font-weight:700;color:#fff}
+.timeline div{display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;opacity:.55;transition:opacity .1s}
+.timeline div.on{opacity:1}
+#playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);opacity:1 !important}
+
+/* ---------- 스프라이트 ---------- */
+.sprites{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.sprite{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
+.sprite .pix{display:grid;grid-template-columns:repeat(5,18px);gap:3px;justify-content:center;margin:6px auto 10px}
+.sprite .pix i{width:18px;height:18px;border-radius:3px;background:var(--pix-off)}
+.sprite .pix i.on{background:var(--pix-on)}
+.sprite .pix i.sh{background:var(--c-air)}
+.sprite b{display:block;font-size:15px}
+.sprite small{color:var(--muted);font-size:13px;line-height:1.5;display:block}
+.binrow{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);line-height:1.45}
+
+/* ---------- 프레임 스트립 ---------- */
+.strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+.fr{flex:0 0 auto;text-align:center}
+.fr canvas{width:50px;height:80px;image-rendering:pixelated;border-radius:6px;background:var(--lcd);display:block}
+.fr span{font-size:11px;color:var(--muted);display:block;margin-top:4px;font-family:"JetBrains Mono",monospace}
+
+.graph svg{width:100%;height:auto;display:block}
+footer{padding:48px 0 64px;color:var(--muted);font-size:14px}
+ol.steps{padding-left:20px} ol.steps li{margin:6px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Arduino · LCD 1602 · Custom Character</div>
+    <h1>말랑이 — 동작 중임을 알려주는<br>LCD 하트비트 캐릭터</h1>
+    <p class="sub">LCD 첫째 줄 첫 글자 칸(0,0)에 사는 젤리 캐릭터 <b>‘말랑이’</b>가 웅크렸다 → 늘어나며 도약 → 포물선으로 떠올랐다 → 납작하게 착지하는 동작을 끝없이 반복합니다. 말랑이가 뛰고 있으면 아두이노의 <code>loop()</code>가 살아 있다는 뜻입니다.</p>
+    <div class="meta">
+      <span class="chip">임베디드시스템공학과 · 박강민</span>
+      <span class="chip">Arduino UNO + I2C LCD(PCF8574)</span>
+      <span class="chip">1회 점프 주기 1.58초</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#demo">실시간 미리보기</a>
+  <a href="#wiring">1. 연결도</a>
+  <a href="#photo">2. 데모 사진</a>
+  <a href="#design">3. 캐릭터 설계</a>
+  <a href="#how">4. 동작 원리</a>
+  <a href="#code">5. 스케치</a>
+  <a href="#review">6. 고찰</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- ================= 실시간 미리보기 ================= -->
+<section id="demo">
+  <h2>실시간 미리보기</h2>
+  <p class="lead">아래 화면은 아두이노 스케치와 <b>똑같은 상태 기계·시간값·스프라이트</b>를 자바스크립트로 옮겨 그린 LCD 시뮬레이션입니다. 오른쪽은 (0,0) 칸 한 글자(5×8 점)를 확대한 모습입니다.</p>
+  <div class="card">
+    <div class="sim">
+      <div class="lcd-shell"><div class="lcd-bezel"><canvas id="lcd" width="1000" height="230"></canvas></div></div>
+      <div class="zoom-wrap"><canvas id="zoom" width="5" height="8"></canvas><div class="label">(0,0) 칸 확대 · 5×8 픽셀</div></div>
+    </div>
+    <div class="controls">
+      <button id="b1" aria-pressed="true">1× 실제 속도</button>
+      <button id="b4" aria-pressed="false">¼× 슬로모션</button>
+      <button id="bp" aria-pressed="false">⏸ 일시정지</button>
+      <span class="phase-now">현재 단계: <b id="phaseName">IDLE</b></span>
+    </div>
+    <div class="timeline" id="timeline"><span id="playhead"></span></div>
+  </div>
+</section>
+
+<!-- ================= 1. 연결도 ================= -->
+<section id="wiring">
+  <h2><span class="n">1</span>연결도</h2>
+  <p class="lead">I2C 변환 모듈(PCF8574)이 붙은 LCD를 쓰기 때문에 점퍼선 <b>4개</b>로 연결이 끝납니다. 대비 조절 가변저항과 백라이트 저항은 모듈 안에 이미 들어 있어서 브레드보드가 필요 없습니다.</p>
+  <figure>
+    <img src="image.png" alt="Arduino UNO와 I2C LCD 1602 모듈 연결도: GND-GND, VCC-5V, SDA-A4, SCL-A5" loading="lazy">
+    <figcaption>그림 1. 프리징(Fritzing) 스타일 연결도 — Arduino UNO + I2C LCD 1602 모듈</figcaption>
+  </figure>
+  <div class="card" style="margin-top:16px">
+    <table>
+      <thead><tr><th>LCD 모듈 핀</th><th>Arduino UNO 핀</th><th>역할</th></tr></thead>
+      <tbody>
+        <tr><td><span class="dot" style="background:#3a3a3a"></span>GND</td><td>GND</td><td>기준 전압(0 V). 두 보드의 0 V를 같게 맞춥니다.</td></tr>
+        <tr><td><span class="dot" style="background:#d63333"></span>VCC</td><td>5V</td><td>LCD·백라이트·PCF8574에 전원 공급</td></tr>
+        <tr><td><span class="dot" style="background:#2a6fdb"></span>SDA</td><td>A4 (SDA)</td><td>I2C <b>데이터</b> 선 — 실제 정보(명령, 글자, 그림)가 오가는 선</td></tr>
+        <tr><td><span class="dot" style="background:#e6b800"></span>SCL</td><td>A5 (SCL)</td><td>I2C <b>클록</b> 선 — “지금 읽어!” 박자를 맞추는 선</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">LCD 1602 자체는 원래 16개 핀(데이터 8개 + 제어선)을 써야 합니다. 뒷면의 PCF8574 칩이 아두이노에서 2개 선(SDA·SCL)으로 받은 신호를 다시 LCD의 여러 핀으로 펼쳐 주기 때문에 선이 4개로 줄어듭니다. 이 모듈의 I2C 주소는 <code>0x27</code>입니다.</div>
+</section>
+
+<!-- ================= 2. 데모 사진 ================= -->
+<section id="photo">
+  <h2><span class="n">2</span>데모 사진</h2>
+  <p class="lead">실제 회로에 업로드해 실행한 모습입니다. 첫 칸의 말랑이와 <code>RUNNING</code> 글자, 둘째 줄의 동작 시간 <code>UP 00:00:16</code>이 보입니다.</p>
+  <figure>
+    <img src="image.jpg" alt="Arduino UNO에 연결된 파란 LCD 1602 화면에 말랑이 캐릭터, RUNNING, UP 00:00:16이 표시된 사진" loading="lazy">
+    <figcaption>그림 2. 실행 사진 — 전원 인가 후 16초 경과 시점</figcaption>
+  </figure>
+</section>
+
+<!-- ================= 3. 캐릭터 설계 ================= -->
+<section id="design">
+  <h2><span class="n">3</span>캐릭터 설계</h2>
+  <p class="lead">LCD 한 글자 칸은 가로 5점 × 세로 8점으로 되어 있습니다. 이 40개의 점 하나하나를 켜고 끄는 방식으로 말랑이의 모양을 그렸습니다. <b>검은 칸 = 켜진 점(1)</b>, 눈은 일부러 <b>꺼진 점(0)</b>으로 남겨 표현했습니다.</p>
+
+  <h3>3-1. 스프라이트(모양) 5종 + 그림자</h3>
+  <div class="sprites" id="sprites"></div>
+
+  <h3>3-2. 한 번의 점프를 프레임으로 펼치면</h3>
+  <p>점프 한 번(1.58초) 동안 (0,0) 칸에 실제로 그려지는 서로 다른 그림을 순서대로 늘어놓은 것입니다. 아래 숫자는 각 그림이 시작되는 시각(ms)입니다.</p>
+  <div class="card"><div class="strip" id="strip"></div></div>
+
+  <h3>3-3. 애니메이션 원칙 — 스쿼시 &amp; 스트레치</h3>
+  <p>애니메이션에서 물렁한 물체를 살아 있는 것처럼 보이게 하는 기본 원칙이 <b>스쿼시(찌그러짐) &amp; 스트레치(늘어남)</b>입니다. 힘을 모을 때는 납작해지고, 빠르게 움직일 때는 길게 늘어나고, 땅에 부딪히면 다시 납작해집니다. 5×8 점밖에 없는 작은 칸이라 위치를 옮길 수 있는 거리가 4점뿐이지만, <b>모양이 바뀌는 것</b>까지 더해지니 눈에는 훨씬 크게, 부드럽게 움직이는 것처럼 보입니다.</p>
+  <div class="card">
+    <table>
+      <thead><tr><th>단계</th><th>시간</th><th>모양</th><th>의도</th></tr></thead>
+      <tbody id="phaseTable"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 4. 동작 원리 ================= -->
+<section id="how">
+  <h2><span class="n">4</span>동작 원리</h2>
+
+  <h3>4-1. Custom Character — 그림 한 장을 글자로 등록하기</h3>
+  <p>LCD 컨트롤러(HD44780) 안에는 <b>CGRAM</b>이라는 작은 메모리가 있어서, 사용자가 직접 만든 글자를 <b>0~7번, 최대 8개</b>까지 등록할 수 있습니다. 한 글자는 8줄이고 한 줄은 5비트(5점)이므로 <code>byte</code> 8개로 표현됩니다.</p>
+  <ol class="steps">
+    <li><code>lcd.createChar(0, frameBuf)</code> — 8바이트 그림을 CGRAM 0번 칸에 저장</li>
+    <li><code>lcd.write(byte(0))</code> — 화면 (0,0) 위치에 “0번 글자”를 놓음 (setup에서 한 번만)</li>
+    <li>이후에는 <b>0번 칸의 그림만 바꿔치기</b>하면, 화면에 이미 놓인 0번 글자가 <b>즉시 새 그림으로 바뀝니다.</b> 화면 위치를 다시 쓸 필요가 없습니다.</li>
+  </ol>
+  <div class="callout">즉 이 프로젝트에서 “애니메이션”이란 <b>CGRAM 0번 칸 하나를 계속 덮어쓰는 것</b>입니다. 슬롯 1개만 쓰기 때문에 나머지 7개 슬롯은 나중에 다른 아이콘을 위해 비워 둘 수 있습니다.</div>
+
+  <h3>4-2. 프레임 합성 <code>compose()</code> — 스프라이트를 위로 띄우기</h3>
+  <p>스프라이트는 높이가 2~6줄로 제각각입니다. <code>compose(spr, h, lift)</code>는 빈 8줄 도화지를 만든 뒤, 스프라이트의 <b>맨 아랫줄이 7−lift번째 줄</b>에 오도록 붙입니다. <code>lift</code>가 0이면 바닥에 서 있고, 4면 4점 위로 떠 있습니다. 공중에 떠 있을 때는 맨 아랫줄(7번 줄)에 그림자를 함께 그립니다.</p>
+
+  <h3>4-3. 공중 체공 — 포물선 공식이 어디서 나오나</h3>
+  <p>공을 위로 던지면 올라갈수록 느려지고, 꼭대기에서 잠깐 멈췄다가, 내려올수록 빨라집니다. 이 모양이 <b>포물선</b>입니다. 체공 시간 중 지난 비율을 <code>p</code>(0 → 1)라고 하면, 처음(p=0)과 끝(p=1)에서 높이가 0이고 한가운데(p=0.5)에서 가장 높은 가장 간단한 식은 <code>p × (1 − p)</code>입니다. 이 값의 최댓값은 0.5 × 0.5 = 0.25이므로 앞에 4를 곱하면 꼭대기에서 정확히 1이 됩니다. 여기에 최고 높이 4점을 곱한 것이 높이 공식입니다.</p>
+  <div class="card" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:17px">lift = round( MAX_LIFT × 4 × p × (1 − p) ),&nbsp;&nbsp; p = t / 640ms</div>
+  <div class="card graph" style="margin-top:12px"><svg id="graph" viewBox="0 0 640 220" role="img" aria-label="체공 시간에 따른 높이 그래프"></svg>
+    <div style="display:flex;gap:18px;justify-content:center;font-size:13px;color:var(--muted);margin-top:6px"><span><span style="display:inline-block;width:20px;border-top:2px dashed var(--muted);vertical-align:middle"></span> 계산값 4 × 4p(1−p)</span><span><span style="display:inline-block;width:20px;border-top:3px solid var(--c-air);vertical-align:middle"></span> 실제 높이(반올림, 점 단위)</span></div></div>
+  <p>그래프의 계단은 높이가 정수(점 단위)로만 바뀌기 때문입니다. 꼭대기 근처(높이 4)에 오래 머물고, 바닥 근처는 빨리 지나가서 실제 점프처럼 보입니다. 또 바닥 근처(lift ≤ 1, 빠르게 움직이는 구간)에서는 늘어난 모양, 높은 곳에서는 동그란 모양을 써서 속도감을 줍니다.</p>
+
+  <h3>4-4. <code>delay()</code> 없이 시간 재기 — <code>millis()</code> 상태 기계</h3>
+  <p>각 단계(IDLE → CROUCH → LAUNCH → AIR → LAND → RECOVER)는 <code>phaseStart</code>(단계 시작 시각)에서 얼마나 지났는지(<code>t = now − phaseStart</code>)만 보고 다음 단계로 넘어갑니다. <code>delay()</code>로 멈추지 않으므로 같은 <code>loop()</code> 안에서 둘째 줄 동작 시간도 1초마다 갱신할 수 있고, 나중에 센서 읽기 같은 다른 일을 추가해도 애니메이션이 끊기지 않습니다.</p>
+
+  <h3>4-5. 바뀔 때만 보내기 <code>pushFrame()</code></h3>
+  <p><code>loop()</code>는 1초에 수천 번 돌지만, 그림은 단계가 바뀌거나 높이가 바뀔 때만 달라집니다. 그래서 새 그림(<code>frameBuf</code>)과 마지막으로 보낸 그림(<code>lastFrame</code>)을 <code>memcmp</code>로 비교해 <b>다를 때만</b> <code>createChar</code>를 호출합니다. 점프 한 번에 실제 전송은 약 10여 번뿐이라 I2C 통신량이 크게 줄고, 같은 그림을 계속 다시 써서 생기는 깜빡임도 없습니다.</p>
+
+  <h3>4-6. “동작 중”을 직관적으로 알 수 있는 이유</h3>
+  <ul>
+    <li><b>움직임 자체가 신호</b> — 애니메이션은 <code>loop()</code> 안에서만 진행되므로, 프로그램이 멈추면(무한 대기, 오류 등) 말랑이도 그 자리에서 굳습니다. 사람은 글자보다 움직임을 먼저 알아채므로, 멀리서도 “뛰고 있다 = 살아 있다”를 바로 알 수 있습니다.</li>
+    <li><b>심장 박동 같은 리듬</b> — 1.58초마다 같은 리듬으로 반복되고, 3번에 한 번 서 있는 동안 눈을 깜빡여 생명감을 더했습니다.</li>
+    <li><b>보조 정보</b> — 오른쪽의 <code>RUNNING</code>과 둘째 줄의 <code>UP hh:mm:ss</code>로 얼마 동안 동작했는지 숫자로도 확인할 수 있습니다.</li>
+  </ul>
+</section>
+
+<!-- ================= 5. 스케치 ================= -->
+<section id="code">
+  <h2><span class="n">5</span>스케치</h2>
+  <p class="lead">사용 라이브러리: <code>Wire.h</code>(I2C 통신, 기본 포함), <code>LiquidCrystal_I2C.h</code>(I2C LCD 제어). &nbsp;<a href="mallangi_heartbeat.ino" download>⬇ mallangi_heartbeat.ino 내려받기</a></p>
+  <pre><code class="language-cpp" id="src">로딩 중…</code></pre>
+</section>
+
+<!-- ================= 6. 고찰 ================= -->
+<section id="review">
+  <h2><span class="n">6</span>고찰</h2>
+
+  <h3>6-1. 좁은 화면에서 “부드러움”을 만드는 방법</h3>
+  <p>한 칸 안에서 캐릭터가 위아래로 움직일 수 있는 거리는 최대 4점뿐이라, 위치만 바꾸면 뚝뚝 끊겨 보입니다. 그래서 <b>위치</b>만 바꾸는 대신 <b>모양(스쿼시 &amp; 스트레치)</b>과 <b>속도 변화(포물선)</b>를 함께 바꿨습니다. 점 개수는 그대로여도 움직임이 훨씬 부드럽고 탄력 있게 느껴집니다. 해상도가 낮을수록 “얼마나 움직이냐”보다 “어떻게 움직이냐”가 중요하다는 것을 알게 되었습니다.</p>
+
+  <h3>6-2. 액정의 느린 반응 속도</h3>
+  <p>LCD 1602의 액정은 점이 켜지고 꺼지는 데 수십~수백 ms가 걸려서, 너무 빠른 프레임(예: 30 ms마다 교체)은 잔상만 남고 보이지 않습니다. 그래서 가장 짧은 단계(LAUNCH)도 70 ms 이상으로 잡았고, 오래 보여야 할 모양(서 있기 520 ms, 체공 640 ms)은 길게 두었습니다. 적당한 잔상은 오히려 프레임 사이를 이어 주는 효과(모션 블러)도 냅니다. 사진은 한순간만 담기므로 실제 동작은 위의 시뮬레이터(¼× 슬로모션)로 보면 단계별 모양을 확인하기 쉽습니다.</p>
+
+  <h3>6-3. 통신량과 CPU 부담</h3>
+  <p>I2C LCD는 1바이트를 보낼 때 PCF8574를 거쳐 4비트씩 두 번 나누어 보내므로 생각보다 느립니다(createChar 한 번에 대략 10 ms 안팎으로 추정). 매 <code>loop()</code>마다 보냈다면 다른 작업 시간이 거의 없었을 것입니다. <code>pushFrame()</code>의 “바뀔 때만 전송” 덕분에 점프 한 번(1.58초)에 10여 번만 전송합니다. 또 <code>createChar</code>를 호출하면 LCD 내부 주소가 CGRAM 쪽으로 옮겨가므로, 그 뒤 글자를 쓰기 전에 반드시 <code>setCursor()</code>를 다시 불러야 합니다. 스케치의 <code>showUptime()</code>에서 매번 <code>lcd.setCursor(0, 1)</code>을 먼저 호출하는 이유입니다(빼먹으면 글자가 화면이 아닌 CGRAM에 써져 캐릭터 그림이 깨질 수 있음).</p>
+
+  <h3>6-4. 한계와 개선 아이디어</h3>
+  <ul>
+    <li><b>정지 감지의 한계</b> — 말랑이가 멈추면 이상이 있다는 건 알 수 있지만, 아두이노가 완전히 멈추면 그 사실을 스스로 알릴 수는 없습니다. <b>워치독 타이머(WDT)</b>를 함께 쓰면 멈췄을 때 자동 재시작까지 할 수 있습니다.</li>
+    <li><b>상태별 표정</b> — 남은 CGRAM 7칸을 활용해 센서값이 정상일 땐 점프, 경고일 땐 제자리에서 떨기, 오류일 땐 쓰러진 표정 등 <b>상태에 따라 다른 모션</b>을 보여 주면 하트비트 이상의 정보를 줄 수 있습니다.</li>
+    <li><b>정수 연산</b> — 포물선 계산에 <code>float</code>를 썼는데, ATmega328P에는 실수 연산 장치가 없어 소프트웨어로 계산합니다. 높이 값이 0~4 다섯 가지뿐이므로 미리 계산한 표(룩업 테이블)로 바꾸면 더 가볍게 만들 수 있습니다.</li>
+    <li><b>칸 경계 넘기</b> — 두 칸(0,0)·(0,1)을 이어 붙이면 좌우로 걸어 다니는 모션도 가능하지만, 과제 조건(첫 글자 칸)과 “한눈에 보이는 하트비트”라는 목적에 맞춰 한 칸 안에서 완결되는 동작을 선택했습니다.</li>
+  </ul>
+
+  <h3>6-5. 정리</h3>
+  <p>40개의 점과 CGRAM 슬롯 하나만으로도 상태 기계, 포물선, 스쿼시 &amp; 스트레치를 조합하면 “살아 있는” 캐릭터를 만들 수 있었습니다. 장비가 정상 동작 중인지 사람에게 알려 주는 <b>하트비트 표시</b>는 실제 임베디드 제품(서버 상태 LED, 공유기 표시등 등)에서도 중요한 기능이며, 이번 과제를 통해 하드웨어 자원이 작을수록 소프트웨어 설계(통신 최소화, non-blocking 구조)가 중요하다는 것을 배웠습니다.</p>
+</section>
+
+</main>
+
+<footer><div class="wrap">© 2026 박강민 · 임베디드시스템공학과 · Arduino LCD 1602 Custom Character 과제</div></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+/* ===== 스케치와 동일한 데이터 ===== */
+const SPR = {
+  NORMAL:  [0b01110,0b10101,0b11111,0b11111],
+  BLINK:   [0b01110,0b11111,0b11111,0b11111],
+  SQUASH:  [0b01110,0b10101,0b11111],
+  FLAT:    [0b10101,0b11111],
+  STRETCH: [0b01110,0b10101,0b11111,0b01110,0b01110,0b00100],
+};
+const SHADOW = [0,0b01110,0b01110,0b00100,0b00100];
+const PH = [
+  {k:'IDLE',   t:520, c:'--c-idle',    shape:'NORMAL (가끔 BLINK)', why:'숨 고르기 · 3번에 1번 눈 깜빡'},
+  {k:'CROUCH', t:140, c:'--c-crouch',  shape:'SQUASH',  why:'웅크려 힘 모으기'},
+  {k:'LAUNCH', t:70,  c:'--c-launch',  shape:'STRETCH', why:'쭉 늘어나며 도약'},
+  {k:'AIR',    t:640, c:'--c-air',     shape:'STRETCH ↔ NORMAL + 그림자', why:'포물선으로 떠올랐다 내려옴'},
+  {k:'LAND',   t:90,  c:'--c-land',    shape:'FLAT',    why:'바닥에 부딪혀 납작'},
+  {k:'RECOVER',t:120, c:'--c-recover', shape:'SQUASH',  why:'탄성으로 원래 모양 복원'},
+];
+const MAX_LIFT=4, CYCLE=PH.reduce((a,p)=>a+p.t,0);
+
+function compose(spr, lift){
+  const f=new Array(8).fill(0), bottom=7-lift, top=bottom-spr.length+1;
+  spr.forEach((row,i)=>{const r=top+i; if(r>=0&&r<8) f[r]=row;});
+  if(lift>0) f[7]|=SHADOW[lift];
+  return f;
+}
+function frameAt(tc, jump){ // tc: 주기 안의 시각(ms)
+  let acc=0;
+  for(const p of PH){
+    if(tc < acc+p.t){
+      const t=tc-acc;
+      switch(p.k){
+        case 'IDLE': {const bl=(jump%3===0)&&t>200&&t<330; return {p:p.k,f:compose(bl?SPR.BLINK:SPR.NORMAL,0)};}
+        case 'CROUCH': return {p:p.k,f:compose(SPR.SQUASH,0)};
+        case 'LAUNCH': return {p:p.k,f:compose(SPR.STRETCH,0)};
+        case 'AIR': {let q=Math.min(t/p.t,1); const lift=Math.floor(MAX_LIFT*4*q*(1-q)+0.5);
+                     return {p:p.k,lift,f:compose(lift<=1?SPR.STRETCH:SPR.NORMAL,lift)};}
+        case 'LAND': return {p:p.k,f:compose(SPR.FLAT,0)};
+        case 'RECOVER': return {p:p.k,f:compose(SPR.SQUASH,0)};
+      }
+    }
+    acc+=p.t;
+  }
+}
+
+/* ===== HD44780 글꼴(사용하는 글자만) ===== */
+const FONT={
+ ' ':[0,0,0,0,0,0,0],
+ '0':[14,17,19,21,25,17,14],'1':[4,12,4,4,4,4,14],'2':[14,17,1,2,4,8,31],'3':[31,2,4,2,1,17,14],
+ '4':[2,6,10,18,31,2,2],'5':[31,16,30,1,1,17,14],'6':[6,8,16,30,17,17,14],'7':[31,1,2,4,8,8,8],
+ '8':[14,17,17,14,17,17,14],'9':[14,17,17,15,1,2,12],':':[0,12,12,0,12,12,0],
+ 'R':[30,17,17,30,20,18,17],'U':[17,17,17,17,17,17,14],'N':[17,17,25,21,19,17,17],
+ 'I':[14,4,4,4,4,4,14],'G':[14,17,16,23,17,17,15],'P':[30,17,17,30,16,16,16],
+};
+const glyph=ch=>[...(FONT[ch]||FONT[' ']),0];
+
+/* ===== LCD 캔버스 ===== */
+const lcd=document.getElementById('lcd'), g=lcd.getContext('2d');
+const zoom=document.getElementById('zoom'), zg=zoom.getContext('2d');
+const COLS=16, ROWS=2, PX=9, GAP=2, CW=5*(PX+GAP)+6, CH=8*(PX+GAP)+10, OX=(1000-COLS*CW)/2+3, OY=(230-ROWS*CH)/2+4;
+function drawCell(col,row,bits){
+  for(let y=0;y<8;y++)for(let x=0;x<5;x++){
+    const on=(bits[y]>>(4-x))&1;
+    g.fillStyle=on?'#eaf6ff':'rgba(80,120,255,.45)';
+    g.fillRect(OX+col*CW+x*(PX+GAP), OY+row*CH+y*(PX+GAP), PX, PX);
+  }
+}
+function drawText(col,row,s){[...s].forEach((c,i)=>drawCell(col+i,row,glyph(c)));}
+function drawZoom(bits){
+  for(let y=0;y<8;y++)for(let x=0;x<5;x++){
+    zg.fillStyle=((bits[y]>>(4-x))&1)?'#eaf6ff':'#2448e0'; zg.fillRect(x,y,1,1);
+  }
+}
+
+/* 타임라인 */
+const tl=document.getElementById('timeline'), ph=document.getElementById('playhead');
+const segs=PH.map(p=>{const d=document.createElement('div');d.style.flex=p.t;d.style.background=`var(${p.c})`;d.textContent=p.t>=120?`${p.k} ${p.t}`:p.k.slice(0,1);d.title=`${p.k} ${p.t}ms`;tl.insertBefore(d,ph);return d;});
+
+let speed=1, paused=false, simT=0, last=performance.now(), startWall=Date.now();
+function setSpeed(s){speed=s;b1.setAttribute('aria-pressed',s===1);b4.setAttribute('aria-pressed',s!==1);}
+b1.onclick=()=>setSpeed(1); b4.onclick=()=>setSpeed(.25);
+bp.onclick=()=>{paused=!paused;bp.setAttribute('aria-pressed',paused);bp.textContent=paused?'▶ 재생':'⏸ 일시정지';};
+
+function fmt(s){const h=Math.floor(s/3600),m=Math.floor(s/60)%60,ss=s%60;return `UP ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;}
+function tick(now){
+  const dt=now-last; last=now;
+  if(!paused) simT+=dt*speed;
+  const jump=Math.floor(simT/CYCLE), tc=simT%CYCLE, fr=frameAt(tc,jump);
+  g.fillStyle='#1438d6'; g.fillRect(0,0,1000,230);
+  drawCell(0,0,fr.f); drawText(1,0,' RUNNING        '); drawText(0,1,fmt(Math.floor(simT/1000)).padEnd(16,' '));
+  drawZoom(fr.f);
+  phaseName.textContent=fr.p+(fr.lift!==undefined?`  (lift=${fr.lift})`:'');
+  segs.forEach((s,i)=>s.classList.toggle('on',PH[i].k===fr.p));
+  ph.style.left=(tc/CYCLE*100)+'%';
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ===== 스프라이트 갤러리 ===== */
+const sprInfo=[
+  ['NORMAL','4줄 · 기본','서 있기 · 높이 떠 있을 때'],
+  ['BLINK','4줄 · 눈 감음','3번 점프마다 1번 깜빡'],
+  ['SQUASH','3줄 · 찌그러짐','웅크리기 · 복원'],
+  ['FLAT','2줄 · 납작','착지 순간'],
+  ['STRETCH','6줄 · 늘어남','도약 · 바닥 근처 이동'],
+];
+const sp=document.getElementById('sprites');
+const bin=v=>v.toString(2).padStart(5,'0');
+function pixHTML(f,shadowRow){return f.map((v,y)=>[0,1,2,3,4].map(x=>{const on=(v>>(4-x))&1;return `<i class="${on?(y===shadowRow?'sh':'on'):''}"></i>`;}).join('')).join('');}
+sprInfo.forEach(([k,a,b])=>{
+  const f=compose(SPR[k],0);
+  sp.insertAdjacentHTML('beforeend',`<div class="sprite"><div class="pix">${pixHTML(f)}</div><b>${k}</b><small>${a}<br>${b}</small><div class="binrow">${SPR[k].map(v=>'B'+bin(v)).join('<br>')}</div></div>`);
+});
+{ const f=compose(SPR.NORMAL,4);
+  sp.insertAdjacentHTML('beforeend',`<div class="sprite"><div class="pix">${pixHTML(f,7)}</div><b>SHADOW (lift=4)</b><small>공중에서 7번 줄에 그림자<br>높을수록 작아짐</small><div class="binrow">${SHADOW.map((v,i)=>i+': B'+bin(v)).join('<br>')}</div></div>`);
+}
+
+/* ===== 프레임 스트립 (서로 다른 프레임만) ===== */
+const strip=document.getElementById('strip'); let prev='';
+for(let t=0;t<CYCLE;t++){
+  const fr=frameAt(t,0), key=fr.f.join(',');
+  if(key===prev) continue; prev=key;
+  const c=document.createElement('canvas'); c.width=5;c.height=8; const x=c.getContext('2d');
+  for(let y=0;y<8;y++)for(let i=0;i<5;i++){x.fillStyle=((fr.f[y]>>(4-i))&1)?'#eaf6ff':'#2448e0';x.fillRect(i,y,1,1);}
+  const d=document.createElement('div'); d.className='fr'; d.appendChild(c);
+  d.insertAdjacentHTML('beforeend',`<span>${t}ms</span><span>${fr.p}</span>`); strip.appendChild(d);
+}
+
+/* ===== 단계 표 ===== */
+phaseTable.innerHTML=PH.map(p=>`<tr><td><span class="dot" style="background:var(${p.c})"></span><b>${p.k}</b></td><td>${p.t} ms</td><td><code>${p.shape}</code></td><td>${p.why}</td></tr>`).join('')+`<tr><td><b>합계</b></td><td><b>${CYCLE} ms</b></td><td colspan="2">약 1.6초마다 한 번 점프</td></tr>`;
+
+/* ===== 포물선 그래프 ===== */
+(function(){
+  const s=document.getElementById('graph'), W=640,H=220,L=44,R=16,T=16,B=36, w=W-L-R, h=H-T-B;
+  const X=p=>L+p*w, Y=v=>T+h-(v/4)*h;
+  let o=`<g font-size="12" fill="currentColor" style="color:var(--muted)">`;
+  for(let v=0;v<=4;v++) o+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-10}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
+  [0,160,320,480,640].forEach(ms=>o+=`<text x="${X(ms/640)}" y="${H-12}" text-anchor="middle">${ms}ms</text>`);
+  o+=`<text x="${L}" y="${T-3}" font-size="11">lift(점)</text></g>`;
+  let c='';for(let i=0;i<=100;i++){const p=i/100;c+=(i?'L':'M')+X(p)+','+Y(MAX_LIFT*4*p*(1-p));}
+  o+=`<path d="${c}" fill="none" stroke="var(--muted)" stroke-dasharray="4 4" stroke-width="1.5"/>`;
+  let st='';for(let t=0;t<=640;t++){const p=t/640,l=Math.floor(MAX_LIFT*4*p*(1-p)+0.5);st+=(t?'L':'M')+X(p)+','+Y(l);}
+  o+=`<path d="${st}" fill="none" stroke="var(--c-air)" stroke-width="3"/>`;
+  s.innerHTML=o;
+})();
+
+/* ===== 스케치 불러오기 ===== */
+fetch('mallangi_heartbeat.ino').then(r=>r.text()).then(t=>{src.textContent=t; if(window.hljs) hljs.highlightElement(src);})
+ .catch(()=>{src.textContent='스케치를 불러오지 못했습니다. 위 링크로 내려받아 주세요.';});
+</script>
+</body>
+</html>
